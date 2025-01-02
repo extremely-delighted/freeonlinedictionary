@@ -7,6 +7,7 @@
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
+            position: relative;
         }
         #controls {
             margin-bottom: 20px;
@@ -25,13 +26,16 @@
             padding: 8px;
             text-align: left;
             cursor: pointer;
+            position: relative;
         }
         tr:nth-child(even){background-color: #f9f9f9;}
         tr:hover {background-color: #f1f1f1;}
         .highlight {
-            background-color: yellow;
+            background-color: yellow !important;
         }
-        /* 模态框样式 */
+        .weak {
+            background-color: #ffcccc;
+        }
         .modal {
             display: none; 
             position: fixed; 
@@ -61,29 +65,99 @@
             padding: 8px 12px;
             margin-right: 10px;
         }
-        /* “我的单词本”样式 */
-        #my-words {
-            margin-bottom: 30px;
-        }
-        #my-words table {
-            background-color: #f9f9f9;
-        }
-        .weak {
-            background-color: #ffcccc;
-        }
-        /* 随机抽取按钮样式 */
         #random-selection {
             padding: 10px 20px;
             font-size: 16px;
+            margin-bottom: 20px;
+        }
+        /* 全局浮动按钮容器 */
+        .floating-button-container {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .floating-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+        .floating-button:hover {
+            background-color: #0056b3;
+        }
+        /* 局部浮动按钮样式 */
+        .local-floating-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #ffc107;
+            color: black;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: none; /* 默认隐藏 */
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            z-index: 1000;
+            transition: background-color 0.3s;
+        }
+        .local-floating-button.show {
+            display: flex;
+        }
+        .local-floating-button:hover {
+            background-color: #e0a800;
+        }
+        /* 快速导航滑动轴 */
+        #quick-nav {
+            position: fixed;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 0 5px 5px 0;
+            z-index: 1000;
+        }
+        #quick-nav input[type="range"] {
+            writing-mode: bt-lr; /* IE */
+            -webkit-appearance: slider-vertical; /* WebKit */
+            width: 8px;
+            height: 200px;
+            background: transparent;
+        }
+        #quick-nav label {
+            color: white;
+            margin-bottom: 10px;
+            display: block;
+            text-align: center;
         }
     </style>
+    <!-- 引入Font Awesome用于图标 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <h1>单词学习器</h1>
     <div id="controls">
-        <input type="text" id="search-input" placeholder="搜索单词">
-        <button id="search-btn">查找</button>
-        <button id="clear-search-btn">清除搜索</button>
+        <input type="file" id="file-input" accept=".txt">
+        <button id="upload-words-btn">上传并加载单词</button>
         <button id="export-btn">导出为TXT</button>
     </div>
 
@@ -95,6 +169,7 @@
                 <th>释义</th>
                 <th>操作</th>
                 <th>错误次数</th>
+                <th>音频</th>
             </tr>
         </thead>
         <tbody>
@@ -111,6 +186,7 @@
                     <th>释义</th>
                     <th>操作</th>
                     <th>错误次数</th>
+                    <th>音频</th>
                 </tr>
             </thead>
             <tbody>
@@ -120,6 +196,27 @@
     </div>
 
     <button id="random-selection">随机抽取单词</button>
+
+    <!-- 全局浮动按钮容器 -->
+    <div class="floating-button-container">
+        <button id="global-find-btn" class="floating-button" title="查找单词">
+            <i class="fas fa-search"></i>
+        </button>
+        <button id="global-random-btn" class="floating-button" title="随机抽取">
+            <i class="fas fa-random"></i>
+        </button>
+    </div>
+
+    <!-- 局部浮动按钮 -->
+    <button id="local-floating-btn" class="local-floating-button" title="控制单词表">
+        <i class="fas fa-cog"></i>
+    </button>
+
+    <!-- 快速导航滑动轴 -->
+    <div id="quick-nav">
+        <label for="nav-slider">快速导航</label>
+        <input type="range" id="nav-slider" min="0" max="100" value="0">
+    </div>
 
     <!-- 模态框 -->
     <div id="modal" class="modal">
@@ -132,39 +229,46 @@
         </div>
     </div>
 
-    <script>
-        // 示例单词列表
-        const wordsList = [
-            { word: "abandon", meaning: "放弃", errors: 0 },
-            { word: "benefit", meaning: "利益", errors: 0 },
-            { word: "category", meaning: "类别", errors: 0 },
-            { word: "define", meaning: "定义", errors: 0 },
-            { word: "economy", meaning: "经济", errors: 0 },
-            { word: "frequency", meaning: "频率", errors: 0 },
-            { word: "generate", meaning: "生成", errors: 0 },
-            { word: "habit", meaning: "习惯", errors: 0 },
-            { word: "identify", meaning: "识别", errors: 0 },
-            { word: "journal", meaning: "期刊", errors: 0 }
-            // 可以根据需要添加更多单词
-        ];
+    <!-- 查找模态框 -->
+    <div id="find-modal" class="modal">
+        <div class="modal-content">
+            <h3>查找单词</h3>
+            <input type="text" id="find-input" placeholder="输入要查找的单词">
+            <button id="find-submit-btn">查找</button>
+            <button id="find-cancel-btn">取消</button>
+        </div>
+    </div>
 
+    <script>
         // DOM元素
         const wordsTableBody = document.querySelector('#words-table tbody');
         const myWordsTableBody = document.querySelector('#my-words-table tbody');
-        const searchInput = document.getElementById('search-input');
-        const searchBtn = document.getElementById('search-btn');
-        const clearSearchBtn = document.getElementById('clear-search-btn');
+        const uploadWordsBtn = document.getElementById('upload-words-btn');
         const exportBtn = document.getElementById('export-btn');
         const randomSelectionBtn = document.getElementById('random-selection');
+        const globalFindBtn = document.getElementById('global-find-btn');
+        const globalRandomBtn = document.getElementById('global-random-btn');
+        const localFloatingBtn = document.getElementById('local-floating-btn');
         const modal = document.getElementById('modal');
         const modalTitle = document.getElementById('modal-title');
         const modalWord = document.getElementById('modal-word');
         const modalInput = document.getElementById('modal-input');
         const modalSubmitBtn = document.getElementById('modal-submit-btn');
         const modalCancelBtn = document.getElementById('modal-cancel-btn');
+        const findModal = document.getElementById('find-modal');
+        const findInput = document.getElementById('find-input');
+        const findSubmitBtn = document.getElementById('find-submit-btn');
+        const findCancelBtn = document.getElementById('find-cancel-btn');
+        const navSlider = document.getElementById('nav-slider');
 
-        let myWords = [];
+        let wordsList = []; // 所有单词
+        let myWords = []; // 我的单词本
         let currentQuizWord = null;
+        let quizQueue = []; // 测验队列
+
+        // 懒加载相关变量
+        const BATCH_SIZE = 20; // 每次加载的单词数量
+        let loadedCount = 0; // 已加载的单词数量
 
         // 初始化
         document.addEventListener('DOMContentLoaded', () => {
@@ -186,10 +290,45 @@
             localStorage.setItem('myWords', JSON.stringify(myWords));
         }
 
-        // 渲染所有单词表格
+        // 上传并加载单词列表
+        uploadWordsBtn.addEventListener('click', () => {
+            const file = document.getElementById('file-input').files[0];
+            if (!file) {
+                alert('请选择一个文本文件。');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                parseTextFile(content);
+                loadedCount = 0; // 重置加载计数
+                wordsTableBody.innerHTML = ''; // 清空现有内容
+                renderWordsTable();
+            };
+            reader.readAsText(file, 'UTF-8');
+        });
+
+        // 解析文本文件（以换行分割，每行单词和释义用空格分隔）
+        function parseTextFile(content) {
+            const lines = content.split(/\r?\n/);
+            wordsList = [];
+            lines.forEach(line => {
+                const parts = line.trim().split(' ');
+                if (parts.length >= 2) {
+                    const word = parts[0];
+                    const meaning = parts.slice(1).join(' ');
+                    wordsList.push({ word, meaning, errors: 0 });
+                }
+            });
+            alert(`已加载 ${wordsList.length} 个单词。`);
+        }
+
+        // 渲染所有单词表格（懒加载）
         function renderWordsTable() {
-            wordsTableBody.innerHTML = '';
-            wordsList.forEach((wordObj, index) => {
+            const remaining = wordsList.length - loadedCount;
+            const toLoad = Math.min(BATCH_SIZE, remaining);
+            for (let i = 0; i < toLoad; i++) {
+                const wordObj = wordsList[loadedCount];
                 const tr = document.createElement('tr');
 
                 const tdWord = document.createElement('td');
@@ -211,8 +350,16 @@
                 tdErrors.textContent = wordObj.errors;
                 tr.appendChild(tdErrors);
 
+                const tdAudio = document.createElement('td');
+                const playBtn = document.createElement('button');
+                playBtn.textContent = '播放';
+                playBtn.addEventListener('click', () => playWord(wordObj.word));
+                tdAudio.appendChild(playBtn);
+                tr.appendChild(tdAudio);
+
                 wordsTableBody.appendChild(tr);
-            });
+                loadedCount++;
+            }
         }
 
         // 渲染“我的单词本”表格
@@ -240,6 +387,13 @@
                 tdErrors.textContent = wordObj.errors;
                 tr.appendChild(tdErrors);
 
+                const tdAudio = document.createElement('td');
+                const playBtn = document.createElement('button');
+                playBtn.textContent = '播放';
+                playBtn.addEventListener('click', () => playWord(wordObj.word));
+                tdAudio.appendChild(playBtn);
+                tr.appendChild(tdAudio);
+
                 // 根据错误次数高亮显示
                 if (wordObj.errors >= 3) {
                     tr.classList.add('weak');
@@ -251,80 +405,56 @@
 
         // 添加单词到“我的单词本”
         function addToMyWords(wordObj) {
-            // 检查是否已经存在
-            if (myWords.some(w => w.word === wordObj.word)) {
+            if (!myWords.some(w => w.word === wordObj.word)) {
+                myWords.push({ ...wordObj });
+                saveMyWords();
+                renderMyWordsTable();
+            } else {
                 alert('该单词已在“我的单词本”中。');
-                return;
             }
-            myWords.push({ ...wordObj });
-            saveMyWords();
-            renderMyWordsTable();
         }
 
-        // 从“我的单词本”移除单词
+        // 从“我的单词本”移除
         function removeFromMyWords(index) {
             myWords.splice(index, 1);
             saveMyWords();
             renderMyWordsTable();
         }
 
-        // 搜索单词
-        searchBtn.addEventListener('click', () => {
-            const query = searchInput.value.trim().toLowerCase();
-            if (query === '') return;
-
-            // 清除之前的高亮
-            clearHighlights();
-
-            // 遍历所有单词，找到匹配的并高亮
-            const rows = wordsTableBody.querySelectorAll('tr');
-            rows.forEach(row => {
-                const wordCell = row.children[0];
-                if (wordCell.textContent.toLowerCase().includes(query)) {
-                    wordCell.parentNode.classList.add('highlight');
-                }
-            });
-        });
-
-        // 清除搜索高亮
-        clearSearchBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            clearHighlights();
-        });
-
-        function clearHighlights() {
-            const highlighted = document.querySelectorAll('.highlight');
-            highlighted.forEach(row => row.classList.remove('highlight'));
+        // 播放单词的音频
+        function playWord(word) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(word);
+                utterance.lang = 'en-US'; // 设置语言为英语
+                window.speechSynthesis.speak(utterance);
+            } else {
+                alert('您的浏览器不支持语音合成功能。');
+            }
         }
 
-        // 导出所有单词为TXT
-        exportBtn.addEventListener('click', () => {
-            let output = '单词\t释义\t错误次数\n';
-            wordsList.forEach(wordObj => {
-                output += `${wordObj.word}\t${wordObj.meaning}\t${wordObj.errors}\n`;
-            });
-            const blob = new Blob([output], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'words.txt';
-            a.click();
-            URL.revokeObjectURL(url);
-        });
-
-        // 随机抽取单词（使用模拟退火算法）
+        // 随机抽取单词进行测验（全局）
         randomSelectionBtn.addEventListener('click', () => {
-            if (myWords.length === 0) {
-                alert('“我的单词本”为空，请先添加单词。');
+            if (wordsList.length === 0) {
+                alert('请先上传单词列表。');
                 return;
             }
-            const selectedWord = simulatedAnnealingSelect(myWords);
+            const selectedWord = simulatedAnnealingSelect(wordsList);
+            startQuiz(selectedWord);
+        });
+
+        // 随机抽取单词进行测验（全局浮动按钮）
+        globalRandomBtn.addEventListener('click', () => {
+            if (wordsList.length === 0) {
+                alert('请先上传单词列表。');
+                return;
+            }
+            const selectedWord = simulatedAnnealingSelect(wordsList);
             startQuiz(selectedWord);
         });
 
         // 模拟退火算法选择单词
         function simulatedAnnealingSelect(words) {
-            // 初始温度
+            // 初始化温度
             let temperature = 100.0;
             // 冷却速率
             const coolingRate = 0.95;
@@ -336,7 +466,7 @@
             while (temperature > 1) {
                 // 选择一个随机的邻居
                 let neighbor = words[Math.floor(Math.random() * words.length)];
-                // 计算当前和邻居的错误次数
+                // 计算当前和邻居的错误次数差异
                 let delta = neighbor.errors - current.errors;
 
                 if (delta > 0 || Math.random() < Math.exp(delta / temperature)) {
@@ -365,13 +495,12 @@
 
         // 提交测验答案
         modalSubmitBtn.addEventListener('click', () => {
-            const userAnswer = modalInput.value.trim().toLowerCase();
-            const correctAnswer = currentQuizWord.meaning.toLowerCase();
-            if (userAnswer === correctAnswer) {
+            const userAnswer = modalInput.value.trim();
+            const correctAnswer = currentQuizWord.meaning;
+            if (userAnswer.toLowerCase() === correctAnswer.toLowerCase()) {
                 alert('回答正确！');
             } else {
                 alert(`回答错误。正确答案是：${currentQuizWord.meaning}`);
-                // 增加错误次数
                 currentQuizWord.errors += 1;
                 updateWordErrors(currentQuizWord.word, currentQuizWord.errors);
             }
@@ -387,6 +516,9 @@
         window.addEventListener('click', (event) => {
             if (event.target == modal) {
                 modal.style.display = 'none';
+            }
+            if (event.target == findModal) {
+                findModal.style.display = 'none';
             }
         });
 
@@ -407,6 +539,551 @@
             // 重新渲染主表格
             renderWordsTable();
         }
+
+        // 全局查找按钮功能
+        globalFindBtn.addEventListener('click', () => {
+            openFindModal(false);
+        });
+
+        // 局部查找按钮功能（通过局部浮动按钮的菜单）
+        // 在菜单中已调用 openFindModal(true)
+
+        // 打开查找模态框
+        // isLocal 参数区分是全局查找还是局部查找
+        function openFindModal(isLocal = false) {
+            findModal.style.display = 'block';
+            findInput.value = '';
+            findInput.focus();
+            findModal.dataset.isLocal = isLocal; // 设置是否为局部查找
+        }
+
+        // 查找按钮
+        findSubmitBtn.addEventListener('click', () => {
+            const query = findInput.value.trim().toLowerCase();
+            if (query === '') {
+                alert('请输入要查找的单词。');
+                return;
+            }
+            clearHighlights();
+            const results = fuzzySearch(query, wordsList);
+            if (results.length > 0) {
+                results.forEach(index => {
+                    const row = wordsTableBody.children[index];
+                    if (row) {
+                        row.classList.add('highlight');
+                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                });
+                alert(`找到 ${results.length} 个匹配的单词。`);
+            } else {
+                alert('未找到该单词。');
+            }
+            findModal.style.display = 'none';
+        });
+
+        // 取消查找
+        findCancelBtn.addEventListener('click', () => {
+            findModal.style.display = 'none';
+        });
+
+        // 清除所有高亮
+        function clearHighlights() {
+            const highlighted = document.querySelectorAll('.highlight');
+            highlighted.forEach(row => row.classList.remove('highlight'));
+        }
+
+        // 导出所有单词为TXT
+        exportBtn.addEventListener('click', () => {
+            let output = '单词\t释义\t错误次数\n';
+            wordsList.forEach(wordObj => {
+                output += `${wordObj.word}\t${wordObj.meaning}\t${wordObj.errors}\n`;
+            });
+            const blob = new Blob([output], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'words.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // 全局随机抽取按钮功能
+        globalRandomBtn.addEventListener('click', () => {
+            if (wordsList.length === 0) {
+                alert('请先上传单词列表。');
+                return;
+            }
+            const selectedWord = simulatedAnnealingSelect(wordsList);
+            startQuiz(selectedWord);
+        });
+
+        // 随机抽取单词进行测验（局部浮动按钮的随机功能）
+        randomSelectionBtn.addEventListener('click', () => {
+            if (wordsList.length === 0) {
+                alert('请先上传单词列表。');
+                return;
+            }
+            const selectedWord = simulatedAnnealingSelect(wordsList);
+            startQuiz(selectedWord);
+        });
+
+        // 监听滚动事件，显示/隐藏局部浮动按钮，并实现懒加载
+        window.addEventListener('scroll', () => {
+            const wordsTable = document.getElementById('words-table');
+            const rect = wordsTable.getBoundingClientRect();
+            if (rect.top <= window.innerHeight && rect.bottom >= 0) {
+                // 表格部分在视口内
+                localFloatingBtn.classList.add('show');
+            } else {
+                localFloatingBtn.classList.remove('show');
+            }
+
+            // 懒加载：当接近底部时加载更多单词
+            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
+                if (loadedCount < wordsList.length) {
+                    renderWordsTable();
+                }
+            }
+        });
+
+        // 局部浮动按钮点击事件（显示菜单）
+        localFloatingBtn.addEventListener('click', () => {
+            // 创建一个菜单，包含查找和随机抽取两个功能
+            const existingMenu = document.getElementById('local-menu');
+            if (existingMenu) return; // 防止多次创建
+
+            const menu = document.createElement('div');
+            menu.id = 'local-menu';
+            menu.style.position = 'fixed';
+            menu.style.bottom = '90px';
+            menu.style.right = '20px';
+            menu.style.backgroundColor = '#ffc107';
+            menu.style.border = '1px solid #ccc';
+            menu.style.borderRadius = '5px';
+            menu.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+            menu.style.zIndex = '1001';
+            menu.style.display = 'flex';
+            menu.style.flexDirection = 'column';
+
+            const findOption = document.createElement('button');
+            findOption.textContent = '查找单词';
+            findOption.style.display = 'block';
+            findOption.style.width = '100%';
+            findOption.style.padding = '10px';
+            findOption.style.border = 'none';
+            findOption.style.backgroundColor = '#ffc107';
+            findOption.style.cursor = 'pointer';
+            findOption.addEventListener('click', () => {
+                openFindModal(true);
+                document.body.removeChild(menu);
+            });
+
+            const randomOption = document.createElement('button');
+            randomOption.textContent = '随机抽取';
+            randomOption.style.display = 'block';
+            randomOption.style.width = '100%';
+            randomOption.style.padding = '10px';
+            randomOption.style.border = 'none';
+            randomOption.style.backgroundColor = '#ffc107';
+            randomOption.style.cursor = 'pointer';
+            randomOption.addEventListener('click', () => {
+                if (wordsList.length === 0) {
+                    alert('请先上传单词列表。');
+                    return;
+                }
+                const selectedWord = simulatedAnnealingSelect(wordsList);
+                startQuiz(selectedWord);
+                document.body.removeChild(menu);
+            });
+
+            menu.appendChild(findOption);
+            menu.appendChild(randomOption);
+
+            document.body.appendChild(menu);
+
+            // 点击页面其他地方关闭菜单
+            const closeMenu = (event) => {
+                if (!menu.contains(event.target) && event.target !== localFloatingBtn) {
+                    document.body.removeChild(menu);
+                    document.removeEventListener('click', closeMenu);
+                }
+            };
+            document.addEventListener('click', closeMenu);
+        });
+
+        // 快速导航滑动轴功能
+        navSlider.addEventListener('input', () => {
+            const percentage = navSlider.value;
+            const targetIndex = Math.floor((percentage / 100) * wordsList.length);
+            const targetRow = wordsTableBody.children[targetIndex];
+            if (targetRow) {
+                targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+
+        // 全局查找按钮功能
+        globalFindBtn.addEventListener('click', () => {
+            openFindModal(false);
+        });
+
+        // 打开查找模态框
+        // isLocal 参数区分是全局查找还是局部查找
+        function openFindModal(isLocal = false) {
+            findModal.style.display = 'block';
+            findInput.value = '';
+            findInput.focus();
+            findModal.dataset.isLocal = isLocal; // 设置是否为局部查找
+        }
+
+        // 查找按钮
+        findSubmitBtn.addEventListener('click', () => {
+            const query = findInput.value.trim().toLowerCase();
+            if (query === '') {
+                alert('请输入要查找的单词。');
+                return;
+            }
+            clearHighlights();
+            const results = fuzzySearch(query, wordsList);
+            if (results.length > 0) {
+                results.forEach(index => {
+                    const row = wordsTableBody.children[index];
+                    if (row) {
+                        row.classList.add('highlight');
+                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                });
+                alert(`找到 ${results.length} 个匹配的单词。`);
+            } else {
+                alert('未找到该单词。');
+            }
+            findModal.style.display = 'none';
+        });
+
+        // 取消查找
+        findCancelBtn.addEventListener('click', () => {
+            findModal.style.display = 'none';
+        });
+
+        // 清除所有高亮
+        function clearHighlights() {
+            const highlighted = document.querySelectorAll('.highlight');
+            highlighted.forEach(row => row.classList.remove('highlight'));
+        }
+
+        // 导出所有单词为TXT
+        exportBtn.addEventListener('click', () => {
+            let output = '单词\t释义\t错误次数\n';
+            wordsList.forEach(wordObj => {
+                output += `${wordObj.word}\t${wordObj.meaning}\t${wordObj.errors}\n`;
+            });
+            const blob = new Blob([output], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'words.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // 全局随机抽取按钮功能
+        globalRandomBtn.addEventListener('click', () => {
+            if (wordsList.length === 0) {
+                alert('请先上传单词列表。');
+                return;
+            }
+            const selectedWord = simulatedAnnealingSelect(wordsList);
+            startQuiz(selectedWord);
+        });
+
+        // 随机抽取单词进行测验（局部浮动按钮的随机功能）
+        randomSelectionBtn.addEventListener('click', () => {
+            if (wordsList.length === 0) {
+                alert('请先上传单词列表。');
+                return;
+            }
+            const selectedWord = simulatedAnnealingSelect(wordsList);
+            startQuiz(selectedWord);
+        });
+
+        // 模拟退火算法选择单词
+        function simulatedAnnealingSelect(words) {
+            // 初始化温度
+            let temperature = 100.0;
+            // 冷却速率
+            const coolingRate = 0.95;
+            // 当前解
+            let current = words[Math.floor(Math.random() * words.length)];
+            // 最佳解
+            let best = current;
+
+            while (temperature > 1) {
+                // 选择一个随机的邻居
+                let neighbor = words[Math.floor(Math.random() * words.length)];
+                // 计算当前和邻居的错误次数差异
+                let delta = neighbor.errors - current.errors;
+
+                if (delta > 0 || Math.random() < Math.exp(delta / temperature)) {
+                    current = neighbor;
+                    if (current.errors > best.errors) {
+                        best = current;
+                    }
+                }
+
+                // 降温
+                temperature *= coolingRate;
+            }
+
+            return best;
+        }
+
+        // 开始测验
+        function startQuiz(wordObj) {
+            currentQuizWord = wordObj;
+            modalTitle.textContent = `请翻译单词：${wordObj.word}`;
+            modalWord.textContent = wordObj.word;
+            modalInput.value = '';
+            modal.style.display = 'block';
+            modalInput.focus();
+        }
+
+        // 提交测验答案
+        modalSubmitBtn.addEventListener('click', () => {
+            const userAnswer = modalInput.value.trim();
+            const correctAnswer = currentQuizWord.meaning;
+            if (userAnswer.toLowerCase() === correctAnswer.toLowerCase()) {
+                alert('回答正确！');
+            } else {
+                alert(`回答错误。正确答案是：${currentQuizWord.meaning}`);
+                currentQuizWord.errors += 1;
+                updateWordErrors(currentQuizWord.word, currentQuizWord.errors);
+            }
+            modal.style.display = 'none';
+        });
+
+        // 取消测验
+        modalCancelBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+
+        // 点击模态框外部关闭模态框
+        window.addEventListener('click', (event) => {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+            if (event.target == findModal) {
+                findModal.style.display = 'none';
+            }
+        });
+
+        // 更新单词的错误次数
+        function updateWordErrors(word, errors) {
+            // 更新主单词列表
+            const wordObj = wordsList.find(w => w.word === word);
+            if (wordObj) {
+                wordObj.errors = errors;
+            }
+            // 更新“我的单词本”
+            const myWordObj = myWords.find(w => w.word === word);
+            if (myWordObj) {
+                myWordObj.errors = errors;
+                saveMyWords();
+                renderMyWordsTable();
+            }
+            // 重新渲染主表格
+            renderWordsTable();
+        }
+
+        // 快速导航滑动轴功能
+        navSlider.addEventListener('input', () => {
+            const percentage = navSlider.value;
+            const targetIndex = Math.floor((percentage / 100) * wordsList.length);
+            const targetRow = wordsTableBody.children[targetIndex];
+            if (targetRow) {
+                targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+
+        // 全局查找按钮功能
+        globalFindBtn.addEventListener('click', () => {
+            openFindModal(false);
+        });
+
+        // 局部查找按钮功能（通过局部浮动按钮的菜单）
+        // 在菜单中已调用 openFindModal(true)
+
+        // 打开查找模态框
+        // isLocal 参数区分是全局查找还是局部查找
+        function openFindModal(isLocal = false) {
+            findModal.style.display = 'block';
+            findInput.value = '';
+            findInput.focus();
+            findModal.dataset.isLocal = isLocal; // 设置是否为局部查找
+        }
+
+        // 查找按钮
+        findSubmitBtn.addEventListener('click', () => {
+            const query = findInput.value.trim().toLowerCase();
+            if (query === '') {
+                alert('请输入要查找的单词。');
+                return;
+            }
+            clearHighlights();
+            const results = fuzzySearch(query, wordsList);
+            if (results.length > 0) {
+                results.forEach(index => {
+                    const row = wordsTableBody.children[index];
+                    if (row) {
+                        row.classList.add('highlight');
+                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                });
+                alert(`找到 ${results.length} 个匹配的单词。`);
+            } else {
+                alert('未找到该单词。');
+            }
+            findModal.style.display = 'none';
+        });
+
+        // 取消查找
+        findCancelBtn.addEventListener('click', () => {
+            findModal.style.display = 'none';
+        });
+
+        // 清除所有高亮
+        function clearHighlights() {
+            const highlighted = document.querySelectorAll('.highlight');
+            highlighted.forEach(row => row.classList.remove('highlight'));
+        }
+
+        // Fuzzy Search 实现
+        function fuzzySearch(query, list) {
+            const results = [];
+            list.forEach((item, index) => {
+                const word = item.word.toLowerCase();
+                if (isFuzzyMatch(query, word)) {
+                    results.push(index);
+                }
+            });
+            return results;
+        }
+
+        // 简单的模糊匹配函数（可根据需求改进）
+        function isFuzzyMatch(query, word) {
+            // 允许最多1个字符的错位
+            if (word.includes(query)) return true;
+            if (levenshteinDistance(query, word) <= 1) return true;
+            return false;
+        }
+
+        // Levenshtein Distance 实现
+        function levenshteinDistance(a, b) {
+            const matrix = [];
+
+            // 初始化第一列和第一行
+            for (let i = 0; i <= b.length; i++) {
+                matrix[i] = [i];
+            }
+            for (let j = 0; j <= a.length; j++) {
+                matrix[0][j] = j;
+            }
+
+            for (let i = 1; i <= b.length; i++) {
+                for (let j = 1; j <= a.length; j++) {
+                    if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(
+                            matrix[i - 1][j] + 1,    // 删除
+                            matrix[i][j - 1] + 1,    // 插入
+                            matrix[i - 1][j - 1] + 1 // 替换
+                        );
+                    }
+                }
+            }
+
+            return matrix[b.length][a.length];
+        }
+
+        // 快速抽取单词连贯性
+        function startContinuousQuiz() {
+            if (quizQueue.length === 0) {
+                // 初始化队列，按照错误次数从高到低排序
+                quizQueue = [...wordsList].sort((a, b) => b.errors - a.errors);
+            }
+
+            if (quizQueue.length > 0) {
+                const selectedWord = quizQueue.shift();
+                startQuiz(selectedWord);
+            } else {
+                alert('没有更多单词进行测验。');
+            }
+        }
+
+        // 局部浮动按钮点击事件（显示菜单）
+        localFloatingBtn.addEventListener('click', () => {
+            // 创建一个菜单，包含查找和随机抽取两个功能
+            const existingMenu = document.getElementById('local-menu');
+            if (existingMenu) return; // 防止多次创建
+
+            const menu = document.createElement('div');
+            menu.id = 'local-menu';
+            menu.style.position = 'fixed';
+            menu.style.bottom = '90px';
+            menu.style.right = '20px';
+            menu.style.backgroundColor = '#ffc107';
+            menu.style.border = '1px solid #ccc';
+            menu.style.borderRadius = '5px';
+            menu.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+            menu.style.zIndex = '1001';
+            menu.style.display = 'flex';
+            menu.style.flexDirection = 'column';
+
+            const findOption = document.createElement('button');
+            findOption.textContent = '查找单词';
+            findOption.style.display = 'block';
+            findOption.style.width = '100%';
+            findOption.style.padding = '10px';
+            findOption.style.border = 'none';
+            findOption.style.backgroundColor = '#ffc107';
+            findOption.style.cursor = 'pointer';
+            findOption.addEventListener('click', () => {
+                openFindModal(true);
+                document.body.removeChild(menu);
+            });
+
+            const randomOption = document.createElement('button');
+            randomOption.textContent = '随机抽取';
+            randomOption.style.display = 'block';
+            randomOption.style.width = '100%';
+            randomOption.style.padding = '10px';
+            randomOption.style.border = 'none';
+            randomOption.style.backgroundColor = '#ffc107';
+            randomOption.style.cursor = 'pointer';
+            randomOption.addEventListener('click', () => {
+                if (wordsList.length === 0) {
+                    alert('请先上传单词列表。');
+                    return;
+                }
+                const selectedWord = simulatedAnnealingSelect(wordsList);
+                startQuiz(selectedWord);
+                document.body.removeChild(menu);
+            });
+
+            menu.appendChild(findOption);
+            menu.appendChild(randomOption);
+
+            document.body.appendChild(menu);
+
+            // 点击页面其他地方关闭菜单
+            const closeMenu = (event) => {
+                if (!menu.contains(event.target) && event.target !== localFloatingBtn) {
+                    document.body.removeChild(menu);
+                    document.removeEventListener('click', closeMenu);
+                }
+            };
+            document.addEventListener('click', closeMenu);
+        });
+
     </script>
 </body>
 </html>
