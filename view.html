@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>元素编辑器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #controls {
+            margin-bottom: 20px;
+        }
+        #controls button {
+            margin-left: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            position: relative;
+            cursor: pointer;
+        }
+        tr:nth-child(even){background-color: #f2f2f2;}
+        tr:hover {background-color: #ddd;}
+        /* 自定义右键菜单样式 */
+        #context-menu {
+            display: none;
+            position: absolute;
+            z-index: 1000;
+            width: 200px;
+            background: #fff;
+            border: 1px solid #ccc;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+        }
+        #context-menu ul {
+            list-style: none;
+            padding: 5px 0;
+            margin: 0;
+        }
+        #context-menu ul li {
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        #context-menu ul li:hover {
+            background-color: #f2f2f2;
+        }
+        /* Modal样式 */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 2000; 
+            padding-top: 100px; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.4); 
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 300px;
+            border-radius: 5px;
+        }
+        .modal-content input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+        .modal-content button {
+            padding: 8px 12px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>元素编辑器</h1>
+    <div id="controls">
+        <input type="file" id="file-input" accept=".txt">
+        <button id="export-btn">导出为TXT</button>
+        <button id="render-btn">渲染插入</button> <!-- 新增渲染按钮 -->
+        <button id="move-up-all">整体向上移动</button> <!-- 新增整体移动按钮 -->
+        <button id="move-down-all">整体向下移动</button> <!-- 新增整体移动按钮 -->
+    </div>
+    <table id="elements-table">
+        <thead>
+            <tr>
+                <th>元素 1</th>
+                <th>元素 2</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- 动态生成内容 -->
+        </tbody>
+    </table>
+
+    <!-- 自定义右键菜单 -->
+    <div id="context-menu">
+        <ul>
+            <li id="add-element">替换元素</li> <!-- 修改为“替换元素” -->
+            <li id="insert-element">插入元素</li> <!-- 新增插入元素选项 -->
+            <li id="delete-element">删除元素</li>
+            <li id="move-up">向上移动</li>
+            <li id="move-down">向下移动</li>
+        </ul>
+    </div>
+
+    <!-- 添加/插入元素模态框 -->
+    <div id="add-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title">替换元素</h3> <!-- 动态更改标题 -->
+            <input type="text" id="new-element-input" placeholder="输入元素">
+            <button id="add-confirm-btn">确定</button>
+            <button id="add-cancel-btn">取消</button>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const exportBtn = document.getElementById('export-btn');
+        const renderBtn = document.getElementById('render-btn'); // 渲染按钮
+        const tableBody = document.querySelector('#elements-table tbody');
+        const contextMenu = document.getElementById('context-menu');
+        const addElementOption = document.getElementById('add-element');
+        const insertElementOption = document.getElementById('insert-element'); // 插入元素选项
+        const deleteElementOption = document.getElementById('delete-element');
+        const moveUpOption = document.getElementById('move-up');
+        const moveDownOption = document.getElementById('move-down');
+        const addModal = document.getElementById('add-modal');
+        const addConfirmBtn = document.getElementById('add-confirm-btn');
+        const addCancelBtn = document.getElementById('add-cancel-btn');
+        const newElementInput = document.getElementById('new-element-input');
+        const modalTitle = document.getElementById('modal-title'); // 模态框标题
+
+        let selectedCell = null; // 当前右键点击的单元格
+        let pendingInsertions = []; // 存储待插入的操作
+
+        // 解析并加载文件内容
+        fileInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                loadElements(content);
+            };
+            reader.readAsText(file, 'UTF-8');
+        });
+
+        // 加载元素到表格
+        function loadElements(content) {
+            tableBody.innerHTML = ''; // 清空现有内容
+            const lines = content.split(/\r?\n/);
+            lines.forEach(line => {
+                const elements = line.trim().split(/\s+/);
+                if (elements.length === 0 || (elements.length === 1 && elements[0] === '')) return;
+                const row = document.createElement('tr');
+                const cell1 = document.createElement('td');
+                cell1.textContent = elements[0];
+                const cell2 = document.createElement('td');
+                cell2.textContent = elements[1] || '';
+                row.appendChild(cell1);
+                row.appendChild(cell2);
+                tableBody.appendChild(row);
+            });
+        }
+
+        // 导出表格内容为TXT文件
+        exportBtn.addEventListener('click', function() {
+            applyPendingInsertions(); // 确保所有插入已渲染
+            const rows = tableBody.querySelectorAll('tr');
+            let output = '';
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                const elem1 = cells[0].textContent.trim();
+                const elem2 = cells[1].textContent.trim();
+                if (elem1 || elem2) {
+                    output += elem1 + ' ' + elem2 + '\n';
+                }
+            });
+
+            const blob = new Blob([output], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'output.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // 渲染插入操作
+        renderBtn.addEventListener('click', function() {
+            applyPendingInsertions();
+            alert('所有插入操作已应用。');
+        });
+
+        // 应用所有待插入的操作
+        function applyPendingInsertions() {
+            if (pendingInsertions.length === 0) return;
+            pendingInsertions.forEach(op => {
+                const { cell, content } = op;
+                // 将新内容插入到现有内容的后面
+                cell.textContent += ' ' + content;
+            });
+            pendingInsertions = []; // 清空待插入列表
+        }
+
+        // 显示自定义右键菜单
+        tableBody.addEventListener('contextmenu', function(event) {
+            event.preventDefault();
+            const target = event.target;
+            if (target.tagName.toLowerCase() !== 'td') return;
+
+            selectedCell = target;
+
+            contextMenu.style.top = `${event.pageY}px`;
+            contextMenu.style.left = `${event.pageX}px`;
+            contextMenu.style.display = 'block';
+        });
+
+        // 隐藏右键菜单
+        document.addEventListener('click', function(event) {
+            if (event.button !== 2) { // 不是右键点击
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        // 替换元素选项点击
+        addElementOption.addEventListener('click', function() {
+            contextMenu.style.display = 'none';
+            if (!selectedCell) return;
+            openAddModal('替换元素');
+        });
+
+        // 插入元素选项点击
+        insertElementOption.addEventListener('click', function() {
+            contextMenu.style.display = 'none';
+            if (!selectedCell) return;
+            openAddModal('插入元素');
+        });
+
+        // 删除元素选项点击
+        deleteElementOption.addEventListener('click', function() {
+            contextMenu.style.display = 'none';
+            if (!selectedCell) return;
+            deleteElement(selectedCell);
+        });
+
+        // 向上移动选项点击
+        moveUpOption.addEventListener('click', function() {
+            contextMenu.style.display = 'none';
+            if (!selectedCell) return;
+            moveCell(selectedCell, -1);
+        });
+
+        // 向下移动选项点击
+        moveDownOption.addEventListener('click', function() {
+            contextMenu.style.display = 'none';
+            if (!selectedCell) return;
+            moveCell(selectedCell, 1);
+        });
+
+        // 打开添加/插入元素模态框
+        function openAddModal(mode) {
+            addModal.style.display = 'block';
+            newElementInput.value = '';
+            newElementInput.focus();
+            modalTitle.textContent = mode; // 设置模态框标题
+            addConfirmBtn.dataset.mode = mode; // 存储当前模式
+        }
+
+        // 关闭添加/插入元素模态框
+        function closeAddModal() {
+            addModal.style.display = 'none';
+        }
+
+        // 确认添加/插入元素
+        addConfirmBtn.addEventListener('click', function() {
+            const newElement = newElementInput.value.trim();
+            const mode = addConfirmBtn.dataset.mode;
+            if (!newElement || !selectedCell) {
+                closeAddModal();
+                return;
+            }
+
+            if (mode === '替换元素') {
+                selectedCell.textContent = newElement;
+            } else if (mode === '插入元素') {
+                // 将插入操作加入待处理列表
+                pendingInsertions.push({ cell: selectedCell, content: newElement });
+                alert('插入操作已记录，请点击“渲染插入”按钮应用所有插入。');
+            }
+
+            closeAddModal();
+        });
+
+        // 取消添加/插入元素
+        addCancelBtn.addEventListener('click', function() {
+            closeAddModal();
+        });
+
+        // 点击模态框外部关闭模态框
+        window.addEventListener('click', function(event) {
+            if (event.target == addModal) {
+                closeAddModal();
+            }
+        });
+
+        // 双击单元格替换元素
+        tableBody.addEventListener('dblclick', function(event) {
+            const target = event.target;
+            if (target.tagName.toLowerCase() !== 'td') return;
+            selectedCell = target;
+            openAddModal('替换元素');
+        });
+
+        // 删除元素并前移
+        function deleteElement(cell) {
+            const row = cell.parentNode;
+            const cellIndex = Array.from(row.children).indexOf(cell);
+
+            // 清空当前单元格
+            cell.textContent = '';
+
+            // 获取同一列的所有单元格
+            const rows = Array.from(tableBody.querySelectorAll('tr'));
+            for (let i = 0; i < rows.length; i++) {
+                const currentRow = rows[i];
+                const currentCell = currentRow.children[cellIndex];
+                if (currentCell.textContent.trim() === '') {
+                    // 找到下一个非空单元格
+                    for (let j = i + 1; j < rows.length; j++) {
+                        const nextRow = rows[j];
+                        const nextCell = nextRow.children[cellIndex];
+                        if (nextCell.textContent.trim() !== '') {
+                            currentCell.textContent = nextCell.textContent;
+                            nextCell.textContent = '';
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 移动单元格内容
+        function moveCell(cell, direction) {
+            const row = cell.parentNode;
+            const cellIndex = Array.from(row.children).indexOf(cell);
+            const rows = Array.from(tableBody.querySelectorAll('tr'));
+            const rowIndex = rows.indexOf(row);
+            const targetRowIndex = rowIndex + direction;
+
+            if (targetRowIndex < 0 || targetRowIndex >= rows.length) {
+                alert('无法移动，已经到达边界。');
+                return;
+            }
+
+            const targetRow = rows[targetRowIndex];
+            const targetCell = targetRow.children[cellIndex];
+
+            // 交换内容
+            const temp = cell.textContent;
+            cell.textContent = targetCell.textContent;
+            targetCell.textContent = temp;
+        }
+
+        // 整体向上移动
+        document.getElementById('move-up-all').addEventListener('click', function() {
+            const rows = Array.from(tableBody.querySelectorAll('tr'));
+            if (rows.length === 0) return;
+
+            const firstRow = rows[0];
+            tableBody.removeChild(firstRow);
+            tableBody.appendChild(firstRow); // 将第一行移到最后
+        });
+
+        // 整体向下移动
+        document.getElementById('move-down-all').addEventListener('click', function() {
+            const rows = Array.from(tableBody.querySelectorAll('tr'));
+            if (rows.length === 0) return;
+
+            const lastRow = rows[rows.length - 1];
+            tableBody.removeChild(lastRow);
+            tableBody.insertBefore(lastRow, rows[0]); // 将最后一行移到第一
+        });
+    </script>
+</body>
+</html>
